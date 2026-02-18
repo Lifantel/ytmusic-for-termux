@@ -3,7 +3,7 @@ import json
 import random
 import sys
 
-PLAYLIST_URL = "https://music.youtube.com/playlist?list=PLuWDZBLItlVSR8HoOueDFJieHPNK8uVW4"
+PLAYLIST_URL = "Senin Playlist URL" #playlisttiniz Public olmalı
 
 def get_playlist_items(url):
     print("[+] Playlist okunuyor...\n")
