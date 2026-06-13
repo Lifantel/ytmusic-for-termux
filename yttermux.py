@@ -55,14 +55,11 @@ def play_audio(video_id, title):
         "--no-video",
         "--cache=yes",
         "--demuxer-readahead-secs=20",
-        "--script-opts=ytdl_hook-ytdl_path=yt-dlp",
-        "--ytdl-format=bestaudio[acodec=opus]/bestaudio[acodec=aac]/bestaudio",
+        "--ytdl-format=best/bestaudio/bestvideo+bestaudio",
+        "--ytdl-raw-options=extractor-args=youtube:player_client=android",
+        url
     ]
 
-    if os.path.isfile(COOKIES_FILE):
-        cmd += [f"--ytdl-raw-options=cookies={COOKIES_FILE}"]
-
-    cmd.append(url)
     subprocess.call(cmd)
 
 
