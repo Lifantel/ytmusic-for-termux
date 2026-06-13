@@ -10,20 +10,20 @@ def get_playlist_items(url):
     cmd = [
         "yt-dlp",
         "--flat-playlist",
-        "--extractor-args", "youtube:player_client=android_music",
+        "-i", 
         "-J",
         url
     ]
     try:
         output = subprocess.check_output(cmd)
     except subprocess.CalledProcessError:
-        print("[-] Playlist okunamadı.")
+        print("[-] Playlist okunamadı. Lütfen URL'yi ve internet bağlantınızı kontrol edin.")
         sys.exit(1)
         
     data = json.loads(output)
     items = []
     for entry in data.get("entries", []):
-        if entry.get("id") and entry.get("title"):
+        if entry and entry.get("id") and entry.get("title"):
             items.append({
                 "id": entry["id"],
                 "title": entry["title"]
