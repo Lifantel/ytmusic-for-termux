@@ -1,11 +1,14 @@
 import subprocess
 import random
 import sys
+import os
 
-PLAYLIST_URL = "Senin Playlist URL"  # Playlist'iniz Public olmalı
+PLAYLIST_URL = "https://www.youtube.com/playlist?list=PLuWDZBLItlVSR8HoOueDFJieHPNK8uVW4"
+
+COOKIES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
 
 
-def get_playlist_items(url):
+def get_playlist_items():
     print("[+] Playlist okunuyor...\n")
 
     cmd = [
@@ -14,24 +17,29 @@ def get_playlist_items(url):
         "--ignore-errors",
         "--no-warnings",
         "--print", "%(id)s|||%(title)s",
-        url
     ]
+
+    if os.path.isfile(COOKIES_FILE):
+        cmd += ["--cookies", COOKIES_FILE]
+    else:
+        print("[!] cookies.txt bulunamadı, anonim devam ediliyor.\n")
+
+    cmd.append(PLAYLIST_URL)
 
     try:
         output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True)
     except subprocess.CalledProcessError as e:
-        print(f"[!] Hata oluştu: {e}")
+        print(f"[!] yt-dlp hatası: {e}")
         return []
 
     items = []
     for line in output.strip().splitlines():
-        line = line.strip()
         if "|||" not in line:
             continue
         vid_id, title = line.split("|||", 1)
         vid_id = vid_id.strip()
         title = title.strip()
-        if not vid_id or not title or vid_id.lower() in ("na", "none", "[deleted]"):
+        if not vid_id or not title:
             continue
         items.append({"id": vid_id, "title": title})
 
@@ -40,83 +48,99 @@ def get_playlist_items(url):
 
 def play_audio(video_id, title):
     url = f"https://www.youtube.com/watch?v={video_id}"
-    print(f"\n Çalıyor: {title}\n")
+    print(f"\nÇalıyor: {title}\n")
+
     cmd = [
         "mpv",
         "--no-video",
         "--cache=yes",
         "--demuxer-readahead-secs=20",
         "--ytdl-format=bestaudio/best",
-        "--ytdl-raw-options=extractor-args=youtube:player_client=android",
-        url
     ]
+
+    if os.path.isfile(COOKIES_FILE):
+        cmd += [f"--ytdl-raw-options=cookies={COOKIES_FILE}"]
+
+    cmd.append(url)
     subprocess.call(cmd)
 
 
-def main():
-    items = get_playlist_items(PLAYLIST_URL)
-
-    if not items:
-        print("[!] Hiç şarkı bulunamadı. Playlist URL'sini ve erişim iznini kontrol edin.")
-        sys.exit(1)
-
-    print(f"Toplam {len(items)} şarkı bulundu.\n")
-    print("1 - Sırayla çal")
+def show_menu():
+    print("\n1 - Sırayla çal")
     print("2 - Karışık çal")
     print("3 - Manuel seç")
     print("4 - İlk şarkıyı seç, sonrasını karışık çal")
+    print("0 - Çıkış")
 
-    mode = input("\n> ").strip()
 
-    if mode == "1":
-        for item in items:
-            play_audio(item["id"], item["title"])
+def select_song(items):
+    for i, item in enumerate(items, start=1):
+        print(f"{i:>4}. {item['title']}")
 
-    elif mode == "2":
-        shuffled = items[:]
-        random.shuffle(shuffled)
-        for item in shuffled:
-            play_audio(item["id"], item["title"])
 
-    elif mode == "3":
-        for i, item in enumerate(items, start=1):
-            print(f"{i:>4}. {item['title']}")
-        while True:
-            choice = input("\nŞarkı no (0 = çıkış): ").strip()
-            if choice == "0":
-                break
+def main():
+    items = get_playlist_items()
+
+    if not items:
+        print("[!] Hiç şarkı bulunamadı.")
+        print("    → yt-dlp güncelleyin: pip install -U yt-dlp")
+        print("    → cookies.txt dosyasını script'in yanına koyun")
+        sys.exit(1)
+
+    print(f"{len(items)} şarkı bulundu.")
+
+    while True:
+        show_menu()
+        mode = input("\n> ").strip()
+
+        if mode == "0":
+            break
+
+        elif mode == "1":
+            for item in items:
+                play_audio(item["id"], item["title"])
+
+        elif mode == "2":
+            shuffled = items[:]
+            random.shuffle(shuffled)
+            for item in shuffled:
+                play_audio(item["id"], item["title"])
+
+        elif mode == "3":
+            select_song(items)
+            while True:
+                choice = input("\nŞarkı no (0 = geri): ").strip()
+                if choice == "0":
+                    break
+                if choice.isdigit():
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(items):
+                        play_audio(items[idx]["id"], items[idx]["title"])
+                    else:
+                        print(f"[!] 1 ile {len(items)} arasında girin.")
+                else:
+                    print("[!] Sayı girin.")
+
+        elif mode == "4":
+            select_song(items)
+            choice = input("\nİlk şarkının numarası: ").strip()
             if choice.isdigit():
                 idx = int(choice) - 1
                 if 0 <= idx < len(items):
                     play_audio(items[idx]["id"], items[idx]["title"])
+                    remaining = [s for i, s in enumerate(items) if i != idx]
+                    random.shuffle(remaining)
+                    print("\n[+] Geri kalanlar karışık çalınıyor...\n")
+                    for item in remaining:
+                        play_audio(item["id"], item["title"])
                 else:
-                    print(f"[!] Geçersiz numara. 1 ile {len(items)} arasında girin.")
+                    print(f"[!] 1 ile {len(items)} arasında girin.")
             else:
-                print("[!] Lütfen bir sayı girin.")
+                print("[!] Sayı girin.")
 
-    elif mode == "4":
-        for i, item in enumerate(items, start=1):
-            print(f"{i:>4}. {item['title']}")
-        choice = input("\nİlk çalınacak şarkının numarası: ").strip()
-        if choice.isdigit():
-            idx = int(choice) - 1
-            if 0 <= idx < len(items):
-                first_song = items[idx]
-                play_audio(first_song["id"], first_song["title"])
-                remaining = [s for i, s in enumerate(items) if i != idx]
-                random.shuffle(remaining)
-                print("\n[+] İlk şarkı bitti, geri kalanlar karışık çalınıyor...\n")
-                for item in remaining:
-                    play_audio(item["id"], item["title"])
-            else:
-                print(f"[!] Geçersiz numara. 1 ile {len(items)} arasında girin.")
         else:
-            print("[!] Lütfen geçerli bir sayı girin.")
-
-    else:
-        print("[!] Geçersiz seçim.")
+            print("[!] Geçersiz seçim.")
 
 
 if __name__ == "__main__":
     main()
-
