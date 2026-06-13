@@ -3,7 +3,7 @@ import random
 import sys
 import os
 
-PLAYLIST_URL = "https://www.youtube.com/playlist?list=PLuWDZBLItlVSR8HoOueDFJieHPNK8uVW4"
+PLAYLIST_URL = "play list linkiniz" #Playlistiniz public olmalı
 
 COOKIES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
 
