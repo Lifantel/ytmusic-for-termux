@@ -55,7 +55,8 @@ def play_audio(video_id, title):
         "--no-video",
         "--cache=yes",
         "--demuxer-readahead-secs=20",
-        "--ytdl-format=bestaudio/best",
+        "--script-opts=ytdl_hook-ytdl_path=yt-dlp",
+        "--ytdl-format=bestaudio[acodec=opus]/bestaudio[acodec=aac]/bestaudio",
     ]
 
     if os.path.isfile(COOKIES_FILE):
@@ -83,8 +84,8 @@ def main():
 
     if not items:
         print("[!] Hiç şarkı bulunamadı.")
-        print("    → yt-dlp güncelleyin: pip install -U yt-dlp")
-        print("    → cookies.txt dosyasını script'in yanına koyun")
+        print("yt-dlp güncelleyin: pip install -U yt-dlp")
+        print("cookies.txt dosyasını script'in yanına koyun")
         sys.exit(1)
 
     print(f"{len(items)} şarkı bulundu.")
