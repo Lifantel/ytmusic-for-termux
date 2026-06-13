@@ -40,7 +40,7 @@ def get_playlist_items(url):
 
 def play_audio(video_id, title):
     url = f"https://www.youtube.com/watch?v={video_id}"
-    print(f"\n🎵 Çalıyor: {title}\n")
+    print(f"\n Çalıyor: {title}\n")
     cmd = [
         "mpv",
         "--no-video",
