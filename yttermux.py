@@ -6,28 +6,45 @@ import sys
 PLAYLIST_URL = "Senin Playlist URL" # playlistiniz Public olmalı
 
 def get_playlist_items(url):
-    print("[+] Playlist okunuyor...\n")
-    cmd = [
-        "yt-dlp",
-        "--flat-playlist",
-        "-i", 
-        "-J",
-        url
-    ]
-    try:
-        output = subprocess.check_output(cmd)
-    except subprocess.CalledProcessError:
-        print("[-] Playlist okunamadı. Lütfen URL'yi ve internet bağlantınızı kontrol edin.")
-        sys.exit(1)
-        
-    data = json.loads(output)
+    print("[+] Playlist parça parça okunuyor (Limitler aşılıyor)...\n")
     items = []
-    for entry in data.get("entries", []):
-        if entry and entry.get("id") and entry.get("title"):
-            items.append({
-                "id": entry["id"],
-                "title": entry["title"]
-            })
+    start = 1
+    chunk_size = 50  
+
+    while True:
+        end = start + chunk_size - 1
+        print(f"[*] Çekilen aralık: {start} - {end}")
+        
+        cmd = [
+            "yt-dlp",
+            "--flat-playlist",
+            "-i",
+            "--playlist-start", str(start),
+            "--playlist-end", str(end),
+            "-J",
+            url
+        ]
+        
+        try:
+            output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            break
+            
+        data = json.loads(output)
+        entries = data.get("entries", [])
+        if not entries:
+            break
+            
+        for entry in entries:
+            if entry and entry.get("id") and entry.get("title"):
+                items.append({
+                    "id": entry["id"],
+                    "title": entry["title"]
+                })
+        if len(entries) < chunk_size:
+            break
+        start += chunk_size
+        
     return items
 
 def play_audio(video_id, title):
