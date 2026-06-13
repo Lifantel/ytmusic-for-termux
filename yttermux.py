@@ -26,14 +26,10 @@ def get_playlist_items():
 
     cmd.append(PLAYLIST_URL)
 
-    try:
-        output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"[!] yt-dlp hatası: {e}")
-        return []
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
     items = []
-    for line in output.strip().splitlines():
+    for line in result.stdout.strip().splitlines():
         if "|||" not in line:
             continue
         vid_id, title = line.split("|||", 1)
