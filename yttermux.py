@@ -2,47 +2,87 @@ import subprocess
 import random
 import sys
 import os
+import time
 
-PLAYLIST_URL = "play list linkiniz" #Playlistiniz public olmalı
+PLAYLIST_URL = "play list linkiniz"  # Playlistiniz public olmalı
 
 COOKIES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+CHUNK_SIZE = 50
+MAX_EMPTY_CHUNKS = 2
+SLEEP_BETWEEN_CHUNKS = 1.5
 
 
-def get_playlist_items():
-    print("[+] Playlist okunuyor...\n")
-
+def fetch_chunk(start: int, end: int) -> list[dict]:
+    """Playlist'in [start, end] aralığını yt-dlp ile çeker."""
     cmd = [
         "yt-dlp",
         "--flat-playlist",
         "--ignore-errors",
         "--no-warnings",
+        "--playlist-items", f"{start}-{end}",
         "--print", "%(id)s|||%(title)s",
     ]
 
     if os.path.isfile(COOKIES_FILE):
         cmd += ["--cookies", COOKIES_FILE]
-    else:
-        print("[!] cookies.txt bulunamadı, anonim devam ediliyor.\n")
 
     cmd.append(PLAYLIST_URL)
 
     result = subprocess.run(cmd, capture_output=True, text=True)
 
-    items = []
+    chunk = []
     for line in result.stdout.strip().splitlines():
         if "|||" not in line:
             continue
         vid_id, title = line.split("|||", 1)
         vid_id = vid_id.strip()
         title = title.strip()
-        if not vid_id or not title:
-            continue
-        items.append({"id": vid_id, "title": title})
+        if vid_id and title:
+            chunk.append({"id": vid_id, "title": title})
 
-    return items
+    return chunk
 
 
-def play_audio(video_id, title):
+def get_playlist_items() -> list[dict]:
+    print("[+] Playlist parça parça okunuyor...\n")
+
+    if not os.path.isfile(COOKIES_FILE):
+        print("[!] cookies.txt bulunamadı, anonim devam ediliyor.\n")
+
+    all_items: list[dict] = []
+    seen_ids: set[str] = set()
+    empty_streak = 0
+    start = 1
+
+    while True:
+        end = start + CHUNK_SIZE - 1
+        print(f"[~] {start}-{end} aralığı çekiliyor...", end=" ", flush=True)
+
+        chunk = fetch_chunk(start, end)
+
+        # Tekrar eden ID'leri filtrele
+        new_items = [i for i in chunk if i["id"] not in seen_ids]
+        for item in new_items:
+            seen_ids.add(item["id"])
+
+        if not new_items:
+            empty_streak += 1
+            print(f"boş (ardışık boş: {empty_streak}/{MAX_EMPTY_CHUNKS})")
+            if empty_streak >= MAX_EMPTY_CHUNKS:
+                print("[+] Playlist sonu algılandı, çekme tamamlandı.\n")
+                break
+        else:
+            empty_streak = 0
+            all_items.extend(new_items)
+            print(f"{len(new_items)} şarkı alındı  →  toplam: {len(all_items)}")
+
+        start += CHUNK_SIZE
+        time.sleep(SLEEP_BETWEEN_CHUNKS)
+
+    return all_items
+
+
+def play_audio(video_id: str, title: str) -> None:
     url = f"https://www.youtube.com/watch?v={video_id}"
     print(f"\nÇalıyor: {title}\n")
 
@@ -53,13 +93,13 @@ def play_audio(video_id, title):
         "--demuxer-readahead-secs=20",
         "--ytdl-format=best/bestaudio/bestvideo+bestaudio",
         "--ytdl-raw-options=extractor-args=youtube:player_client=android",
-        url
+        url,
     ]
 
     subprocess.call(cmd)
 
 
-def show_menu():
+def show_menu() -> None:
     print("\n1 - Sırayla çal")
     print("2 - Karışık çal")
     print("3 - Manuel seç")
@@ -67,12 +107,12 @@ def show_menu():
     print("0 - Çıkış")
 
 
-def select_song(items):
+def select_song(items: list[dict]) -> None:
     for i, item in enumerate(items, start=1):
         print(f"{i:>4}. {item['title']}")
 
 
-def main():
+def main() -> None:
     items = get_playlist_items()
 
     if not items:
@@ -81,7 +121,7 @@ def main():
         print("cookies.txt dosyasını script'in yanına koyun")
         sys.exit(1)
 
-    print(f"{len(items)} şarkı bulundu.")
+    print(f"Toplam {len(items)} şarkı yüklendi.")
 
     while True:
         show_menu()
