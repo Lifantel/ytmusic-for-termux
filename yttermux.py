@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 
 # YouTube Music linki public olmalı
-_RAW_URL = "https://music.youtube.com/playlist?list=PLuWDZBLItlVSR8HoOueDFJieHPNK8uVW4"
+_RAW_URL = "playlist URL"
 
 def _normalize_playlist_url(url: str) -> str:
     from urllib.parse import urlparse, parse_qs
