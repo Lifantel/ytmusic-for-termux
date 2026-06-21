@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 
 # YouTube Music linki public olmalı
-_RAW_URL = "playlist URL"
+_RAW_URL = "https://music.youtube.com/playlist?list=PLuWDZBLItlVSR8HoOueDFJieHPNK8uVW4&si=CTz-f-KJN9cvwxpH"
 
 def _normalize_playlist_url(url: str) -> str:
     from urllib.parse import urlparse, parse_qs
@@ -35,8 +35,8 @@ def load_cache() -> dict:
         try:
             with open(CACHE_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            print("[!] Cache bozuk, sıfırlanıyor.\n")
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"[!] Cache bozuk, sıfırlanıyor.{e}\n")
     return {"playlist_url": PLAYLIST_URL, "last_updated": None, "items": []}
 
 
@@ -157,6 +157,106 @@ def get_playlist_items() -> list[dict]:
 
     return []
 
+def _normalize_video_url(url: str) -> str:
+    """youtu.be/ID kısa linklerini standart watch URL'sine çevirir."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.netloc in ("youtu.be", "www.youtu.be"):
+        video_id = parsed.path.lstrip("/")
+        return f"https://www.youtube.com/watch?v={video_id}"
+    return url
+
+
+def fetch_single_video(url: str) -> dict | None:
+    """Tek bir video'nun id ve title bilgisini yt-dlp ile çeker."""
+    url = _normalize_video_url(url)
+    cmd = [
+        "yt-dlp",
+        "--no-playlist",
+        "--ignore-errors",
+        "--no-warnings",
+        "--extractor-args", "youtube:player_client=web_music,web",
+        "--print", "%(id)s|||%(title)s",
+        "--skip-download",
+    ]
+    if os.path.isfile(COOKIES_FILE):
+        cmd += ["--cookies", COOKIES_FILE]
+    cmd.append(url)
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    for line in result.stdout.strip().splitlines():
+        if "|||" not in line:
+            continue
+        vid_id, title = line.split("|||", 1)
+        vid_id, title = vid_id.strip(), title.strip()
+        if vid_id and title:
+            return {
+                "id":    vid_id,
+                "title": title,
+                "url":   f"https://www.youtube.com/watch?v={vid_id}",
+            }
+
+    print(f"[!] yt-dlp çıkış kodu: {result.returncode}")
+    if result.stdout.strip():
+        print(f"[!] stdout:\n{result.stdout.strip()}")
+    if result.stderr.strip():
+        print(f"[!] stderr:\n{result.stderr.strip()}")
+    return None
+
+
+def add_to_cache(items: list[dict]) -> list[dict]:
+    """Kullanıcıdan link alarak cache'e şarkı ekler."""
+    url = input("\nEklemek istediğiniz şarkının YouTube linkini girin: ").strip()
+    if not url:
+        print("[!] Link girilmedi.\n")
+        return items
+
+    print("[~] Video bilgisi alınıyor...")
+    video = fetch_single_video(url)
+
+    if not video:
+        print("[!] Video bilgisi alınamadı. Linki kontrol edin.\n")
+        return items
+
+    existing_ids = {i["id"] for i in items}
+    if video["id"] in existing_ids:
+        print(f"[!] Bu şarkı zaten listede: {video['title']}\n")
+        return items
+
+    items.append(video)
+    save_cache(items)
+    print(f"[+] Eklendi: {video['title']}\n")
+    return items
+
+
+def remove_from_cache(items: list[dict]) -> list[dict]:
+    """Listeden şarkı seçerek cache'den çıkarır."""
+    if not items:
+        print("[!] Liste boş.\n")
+        return items
+
+    print("\n--- Şarkı Listesi ---")
+    for i, item in enumerate(items, start=1):
+        print(f"{i:>4}. {item['title']}")
+
+    choice = input("\nÇıkarmak istediğiniz şarkının numarası (0 = iptal): ").strip()
+    if choice == "0":
+        return items
+
+    if choice.isdigit():
+        idx = int(choice) - 1
+        if 0 <= idx < len(items):
+            removed = items.pop(idx)
+            save_cache(items)
+            print(f"[+] Çıkarıldı: {removed['title']}\n")
+        else:
+            print(f"[!] 1 ile {len(items)} arasında bir numara girin.\n")
+    else:
+        print("[!] Lütfen bir sayı girin.\n")
+
+    return items
+
+
 def play_audio(video_id: str, title: str) -> None:
     url = f"https://www.youtube.com/watch?v={video_id}"
     print(f"\nÇalıyor: {title}\n")
@@ -176,6 +276,8 @@ def show_menu() -> None:
     print("2 - Karışık çal")
     print("3 - Manuel seç")
     print("4 - İlk şarkıyı seç, sonrasını karışık çal")
+    print("5 - Cache'e şarkı ekle (link ile)")
+    print("6 - Cache'den şarkı çıkar")
     print("0 - Çıkış")
 
 
@@ -243,6 +345,12 @@ def main() -> None:
                     print(f"[!] 1 ile {len(items)} arasında girin.")
             else:
                 print("[!] Sayı girin.")
+
+        elif mode == "5":
+            items = add_to_cache(items)
+
+        elif mode == "6":
+            items = remove_from_cache(items)
 
         else:
             print("[!] Geçersiz seçim.")
