@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 
 # YouTube Music linki public olmalı
-_RAW_URL = "playlistURL"
+_RAW_URL = "PlaylistURL"
 
 def _normalize_playlist_url(url: str) -> str:
     from urllib.parse import urlparse, parse_qs
@@ -50,7 +50,7 @@ def save_cache(items: list[dict]) -> None:
     try:
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        print(f"[+] Cache güncellendi → {CACHE_FILE}  ({len(items)} şarkı)\n")
+        print(f"[+] Cache güncellendi {CACHE_FILE}  ({len(items)} şarkı)\n")
     except OSError as e:
         print(f"[!] Cache yazılamadı: {e}\n")
 
@@ -66,7 +66,7 @@ def fetch_chunk(start: int, end: int) -> list[dict]:
         "--flat-playlist",
         "--ignore-errors",
         "--no-warnings",
-        "--extractor-args", "youtube:player_client=web_music,web",
+        "--extractor-args", "youtube:player_client=web_music,web", #android client de kullanabilirsiniz.
         "--playlist-items", f"{start}-{end}",
         "--print", "%(id)s|||%(title)s",
     ]
@@ -145,12 +145,15 @@ def get_playlist_items() -> list[dict]:
             else:
                 print(f"[!] YouTube {len(fresh)} şarkı verdi ve cache yok, elimizdekiyle devam.\n")
                 return fresh
-        if len(fresh) > len(cached):
-            save_cache(fresh)
+        merged = merge_with_cache(fresh, cached)
+
+        if len(merged) > len(cached):
+            save_cache(merged)
         else:
             print(f"[i] Cache zaten güncel, değişiklik yok.\n")
 
-        return fresh
+        return merged
+
     if cached:
         print(f"[!] YouTube'dan hiç veri gelmedi, cache kullanılıyor ({len(cached)} şarkı).\n")
         return cached
@@ -158,24 +161,36 @@ def get_playlist_items() -> list[dict]:
     return []
 
 def _normalize_video_url(url: str) -> str:
-    """youtu.be/ID kısa linklerini standart watch URL'sine çevirir."""
-    from urllib.parse import urlparse
+    """
+    Kısa linkleri (youtu.be), YouTube Music linklerini ve kirli URL parametrelerini 
+    standart 'www.youtube.com/watch?v=...' linkine dönüştürür.
+    """
+    from urllib.parse import urlparse, parse_qs
     parsed = urlparse(url)
+    
+    # 1. Kısa linkleri dönüştürür (Örn: https://youtu.be/Y-9Y4CCIWnM -> watch?v=Y-9Y4CCIWnM)
     if parsed.netloc in ("youtu.be", "www.youtu.be"):
         video_id = parsed.path.lstrip("/")
-        return f"https://www.youtube.com/watch?v={video_id}"
+        if video_id:
+            return f"https://www.youtube.com/watch?v={video_id}"
+    if "youtube.com" in parsed.netloc:
+        qs = parse_qs(parsed.query)
+        video_id = qs.get("v", [None])[0]
+        if video_id:
+            return f"https://www.youtube.com/watch?v={video_id}"
+            
     return url
 
 
 def fetch_single_video(url: str) -> dict | None:
-    """Tek bir video'nun id ve title bilgisini yt-dlp ile çeker."""
-    url = _normalize_video_url(url)
+    """Tek bir video'nun id ve title bilgisini hata vermeden yt-dlp ile çeker."""
+    url = _normalize_video_url(url) 
+    
     cmd = [
         "yt-dlp",
         "--no-playlist",
         "--ignore-errors",
         "--no-warnings",
-        "--extractor-args", "youtube:player_client=web_music,web",
         "--print", "%(id)s|||%(title)s",
         "--skip-download",
     ]
@@ -202,7 +217,6 @@ def fetch_single_video(url: str) -> dict | None:
     if result.stderr.strip():
         print(f"[!] stderr:\n{result.stderr.strip()}")
     return None
-
 
 def add_to_cache(items: list[dict]) -> list[dict]:
     """Kullanıcıdan link alarak cache'e şarkı ekler."""
@@ -312,7 +326,7 @@ def main() -> None:
             shuffled = items[:]
             random.shuffle(shuffled)
             for item in shuffled:
-                play_audio(item["id"], item["title"])
+                play_audio(item["id"], item["shuffled"])
 
         elif mode == "3":
             select_song(items)
