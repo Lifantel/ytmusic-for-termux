@@ -27,7 +27,7 @@ CACHE_FILE    = os.path.join(SCRIPT_DIR, "playlist_cache.json")
 CHUNK_SIZE           = 50
 MAX_EMPTY_CHUNKS     = 2
 SLEEP_BETWEEN_CHUNKS = 1.5
-CACHE_THRESHOLD      = 111  # Bu sayı ve altında gelirse youTube sorunlu, cache kullan
+CACHE_THRESHOLD      = 1  # Bu sayı ve altında gelirse youTube sorunlu, cache kullan
 
 
 def load_cache() -> dict:
